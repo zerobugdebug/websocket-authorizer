@@ -19,13 +19,39 @@ const (
 	defaultTableName = "AUTH"
 )
 
-func handleRequest(ctx context.Context, event events.APIGatewayCustomAuthorizerRequest) (events.APIGatewayV2CustomAuthorizerSimpleResponse, error) {
+// Help function to generate an IAM policy
+func generatePolicy(principalId, effect, resource string) events.APIGatewayCustomAuthorizerResponse {
+	authResponse := events.APIGatewayCustomAuthorizerResponse{PrincipalID: principalId}
+
+	if effect != "" && resource != "" {
+		authResponse.PolicyDocument = events.APIGatewayCustomAuthorizerPolicy{
+			Version: "2012-10-17",
+			Statement: []events.IAMPolicyStatement{
+				{
+					Action:   []string{"execute-api:Invoke"},
+					Effect:   effect,
+					Resource: []string{resource},
+				},
+			},
+		}
+	}
+
+	// Optional output with custom properties of the String, Number or Boolean type.
+	authResponse.Context = map[string]interface{}{
+		"stringKey":  "stringval",
+		"numberKey":  123,
+		"booleanKey": true,
+	}
+	return authResponse
+}
+
+func handleRequest(ctx context.Context, event events.APIGatewayCustomAuthorizerRequest) (events.APIGatewayCustomAuthorizerResponse, error) {
 	fmt.Printf("event: %+v\n", event)
 	// Extract the auth key from Sec-WebSocket-Protocol header
 	authKey := event.AuthorizationToken
 	if authKey == "" {
 		fmt.Println("Sec-WebSocket-Protocol not found")
-		return events.APIGatewayV2CustomAuthorizerSimpleResponse{IsAuthorized: false}, nil
+		return events.APIGatewayCustomAuthorizerResponse{}, errors.New("missing Sec-WebSocket-Protocol header")
 		//return events.APIGatewayCustomAuthorizerResponse{}, errors.New("missing Sec-WebSocket-Protocol header")
 	}
 
@@ -38,7 +64,7 @@ func handleRequest(ctx context.Context, event events.APIGatewayCustomAuthorizerR
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
 		fmt.Printf("Can't connect to DynamoDB: %s\n", err)
-		return events.APIGatewayV2CustomAuthorizerSimpleResponse{IsAuthorized: false}, err
+		return events.APIGatewayCustomAuthorizerResponse{}, err
 	}
 
 	client := dynamodb.NewFromConfig(cfg)
@@ -59,16 +85,18 @@ func handleRequest(ctx context.Context, event events.APIGatewayCustomAuthorizerR
 
 	if err != nil {
 		fmt.Printf("Can't query DynamoDB: %s\n", err)
-		return events.APIGatewayV2CustomAuthorizerSimpleResponse{IsAuthorized: false}, err
+		return events.APIGatewayCustomAuthorizerResponse{}, err
 	}
 
 	if result.Item == nil {
-		fmt.Printf("Can't find auth key: %s\n", err)
-		return events.APIGatewayV2CustomAuthorizerSimpleResponse{IsAuthorized: false}, errors.New("unauthorized")
+		fmt.Printf("Can't find auth key: %s\n", authKey)
+		return events.APIGatewayCustomAuthorizerResponse{}, errors.New("unauthorized")
 	}
 
 	// If auth key is valid, return an "Allow" policy
-	return events.APIGatewayV2CustomAuthorizerSimpleResponse{IsAuthorized: true}, nil
+	//return events.APIGatewayV2CustomAuthorizerSimpleResponse{IsAuthorized: true}, nil
+	// If auth key is valid, return an "Allow" policy
+	return generatePolicy("user", "Allow", event.MethodArn), nil
 }
 
 func main() {
