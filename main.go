@@ -23,6 +23,9 @@ const (
 // Help function to generate an IAM policy
 func generatePolicy(principalId, effect, resource string) events.APIGatewayCustomAuthorizerResponse {
 	authResponse := events.APIGatewayCustomAuthorizerResponse{PrincipalID: principalId}
+	fmt.Printf("authResponse: %v+\n", authResponse)
+	fmt.Printf("effect: %v\n", effect)
+	fmt.Printf("resource: %v\n", resource)
 
 	if effect != "" && resource != "" {
 		authResponse.PolicyDocument = events.APIGatewayCustomAuthorizerPolicy{
@@ -46,9 +49,9 @@ func generatePolicy(principalId, effect, resource string) events.APIGatewayCusto
 	return authResponse
 }
 
-func handleRequest(ctx context.Context, event events.APIGatewayWebsocketProxyRequest) (events.APIGatewayCustomAuthorizerResponse, error) {
+func handleRequest(ctx context.Context, event events.APIGatewayV2CustomAuthorizerV2Request) (events.APIGatewayCustomAuthorizerResponse, error) {
 	fmt.Printf("event: %+v\n", event)
-	// Extract the auth key from Sec-WebSocket-Protocol header
+
 	// Extract the auth key from Sec-WebSocket-Protocol header
 	authKey, ok := event.Headers["Sec-WebSocket-Protocol"]
 	if !ok {
@@ -97,7 +100,7 @@ func handleRequest(ctx context.Context, event events.APIGatewayWebsocketProxyReq
 	// If auth key is valid, return an "Allow" policy
 	//return events.APIGatewayV2CustomAuthorizerSimpleResponse{IsAuthorized: true}, nil
 	// If auth key is valid, return an "Allow" policy
-	return generatePolicy("user", "Allow", event.MethodArn), nil
+	return generatePolicy("user", "Allow", event.RequestContext.DomainName), nil
 }
 
 func main() {
