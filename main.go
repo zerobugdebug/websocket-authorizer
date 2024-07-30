@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+
 )
 
 const (
@@ -45,12 +46,12 @@ func generatePolicy(principalId, effect, resource string) events.APIGatewayCusto
 	return authResponse
 }
 
-func handleRequest(ctx context.Context, event events.APIGatewayCustomAuthorizerRequest) (events.APIGatewayCustomAuthorizerResponse, error) {
+func handleRequest(ctx context.Context, event events.APIGatewayWebsocketProxyRequest) (events.APIGatewayCustomAuthorizerResponse, error) {
 	fmt.Printf("event: %+v\n", event)
 	// Extract the auth key from Sec-WebSocket-Protocol header
-	authKey := event.AuthorizationToken
-	if authKey == "" {
-		fmt.Println("Sec-WebSocket-Protocol not found")
+	// Extract the auth key from Sec-WebSocket-Protocol header
+	authKey, ok := event.Headers["Sec-WebSocket-Protocol"]
+	if !ok {
 		return events.APIGatewayCustomAuthorizerResponse{}, errors.New("missing Sec-WebSocket-Protocol header")
 		//return events.APIGatewayCustomAuthorizerResponse{}, errors.New("missing Sec-WebSocket-Protocol header")
 	}
