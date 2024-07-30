@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
@@ -14,21 +15,29 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
-func handleRequest(ctx context.Context, event events.APIGatewayWebsocketProxyRequest) (events.APIGatewayV2CustomAuthorizerSimpleResponse, error) {
+const (
+	defaultTableName = "AUTH"
+)
+
+func handleRequest(ctx context.Context, event events.APIGatewayCustomAuthorizerRequest) (events.APIGatewayV2CustomAuthorizerSimpleResponse, error) {
+	fmt.Printf("event: %+v\n", event)
 	// Extract the auth key from Sec-WebSocket-Protocol header
-	authKey, ok := event.Headers["Sec-WebSocket-Protocol"]
-	if !ok {
+	authKey := event.AuthorizationToken
+	if authKey == "" {
+		fmt.Println("Sec-WebSocket-Protocol not found")
 		return events.APIGatewayV2CustomAuthorizerSimpleResponse{IsAuthorized: false}, nil
 		//return events.APIGatewayCustomAuthorizerResponse{}, errors.New("missing Sec-WebSocket-Protocol header")
 	}
 
+	fmt.Printf("authKey before split: %v\n", authKey)
 	// If multiple protocols are specified, use the first one as the auth key
 	authKey = strings.Split(authKey, ",")[0]
 	authKey = strings.TrimSpace(authKey)
-
+	fmt.Printf("authKey: %v\n", authKey)
 	// Initialize DynamoDB client
 	cfg, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
+		fmt.Printf("Can't connect to DynamoDB: %s\n", err)
 		return events.APIGatewayV2CustomAuthorizerSimpleResponse{IsAuthorized: false}, err
 	}
 
@@ -36,6 +45,11 @@ func handleRequest(ctx context.Context, event events.APIGatewayWebsocketProxyReq
 
 	// Check if the auth key exists in DynamoDB
 	tableName := os.Getenv("AUTH_TABLE_NAME")
+	if tableName == "" {
+		tableName = defaultTableName
+	}
+	fmt.Printf("tableName: %v\n", tableName)
+
 	result, err := client.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(tableName),
 		Key: map[string]types.AttributeValue{
@@ -44,10 +58,12 @@ func handleRequest(ctx context.Context, event events.APIGatewayWebsocketProxyReq
 	})
 
 	if err != nil {
+		fmt.Printf("Can't query DynamoDB: %s\n", err)
 		return events.APIGatewayV2CustomAuthorizerSimpleResponse{IsAuthorized: false}, err
 	}
 
 	if result.Item == nil {
+		fmt.Printf("Can't find auth key: %s\n", err)
 		return events.APIGatewayV2CustomAuthorizerSimpleResponse{IsAuthorized: false}, errors.New("unauthorized")
 	}
 
